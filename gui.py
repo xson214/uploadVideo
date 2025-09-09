@@ -404,7 +404,7 @@ class CSVGUI:
     def edit_window(self, values, is_add=False, selected=None):
         edit_win = tk.Toplevel(self.root)
         edit_win.title("✏️ Edit Row" if not is_add else "➕ Add New Row")
-        edit_win.geometry("600x500")
+        edit_win.geometry("800x750")
         edit_win.configure(bg='#ecf0f1')
         edit_win.resizable(False, False)
         
@@ -430,7 +430,17 @@ class CSVGUI:
         labels = ["📱 Tên thiết bị", "👤 Tên tk", "🖼️ Ảnh acc", "🆔 Ảnh id", 
                  "📸 Ảnh sản phẩm", "📝 Caption", "🔗 Url"]
         entries = []
-        
+
+        def get_connected_devices():
+            try:
+                result = subprocess.run(['adb', 'devices'], capture_output=True, text=True)
+                lines = result.stdout.strip().split('\n')[1:]  # Bỏ dòng đầu tiên
+                devices = [line.split()[0] for line in lines if 'device' in line]
+                return devices
+            except Exception as e:
+                messagebox.showerror("❌ Error", f"Failed to get connected devices:\n{str(e)}")
+                return ["(Error)"]
+            
         for i, label in enumerate(labels):
             # Label
             label_frame = tk.Frame(form_frame, bg='white')
@@ -440,15 +450,20 @@ class CSVGUI:
                     font=('Arial', 10, 'bold'),
                     bg='white', fg='#2c3e50').pack(anchor='w')
             
-            # Entry
-            entry = tk.Entry(form_frame, font=('Arial', 11), 
-                           relief='solid', bd=1, bg='#f8f9fa')
-            entry.pack(fill=tk.X, ipady=8, pady=(0, 5))
-            
-            if values and i < len(values):
-                entry.insert(0, values[i])
-            entries.append(entry)
-        
+            if i == 0:  # Tên thiết bị
+                devices = get_connected_devices()
+                entry = ttk.Combobox(form_frame, values=devices, font=('Arial', 11))
+                entry.pack(fill=tk.X, ipady=8, pady=(0, 5))
+                if values and i < len(values):
+                    entry.set(values[i])
+            else:
+                entry = tk.Entry(form_frame, font=('Arial', 11), 
+                               relief='solid', bd=1, bg='#f8f9fa')
+                entry.pack(fill=tk.X, ipady=8, pady=(0, 5))
+                if values and i < len(values):
+                    entry.insert(0, values[i])
+            entries.append(entry)        
+
         # Button frame
         button_frame = tk.Frame(form_frame, bg='white')
         button_frame.pack(fill=tk.X, pady=20)

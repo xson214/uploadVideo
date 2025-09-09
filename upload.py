@@ -315,20 +315,53 @@ def add_link(devices_id, product_name, caption_text,url):
             print(f"✅ Đã xóa video {video_file_name} khỏi thiết bị.") 
 
 if __name__ == "__main__":
+    if not rows:
+        print("⚠️ Không có dữ liệu trong accounts.json")
+        exit(0)
+
     for i, row in enumerate(rows, start=1):
         print(f"\n=== Xử lý dòng {i}: {row} ===")
-        devices_id = row.get("ten_thiet_bi", "").strip()
-        url = row.get("url", "").strip()
-        IMG_ACC = row.get("anh_acc", "").strip()
-        IMG_ID = row.get("anh_id", "").strip()
-        product_name = row.get("anh_san_pham", "").strip()  # <-- đây là "anh_san_pham"
+
+        # Đọc thông tin
+        devices_id   = row.get("ten_thiet_bi", "").strip()
+        url          = row.get("url", "").strip()
+        IMG_ACC      = row.get("anh_acc", "").strip()
+        IMG_ID       = row.get("anh_id", "").strip()
+        product_name = row.get("anh_san_pham", "").strip()
         caption_text = row.get("caption", "").strip()
-        
-        print(f"Thiết bị: {devices_id}, URL: {url}, Ảnh acc: {IMG_ACC}, Ảnh id: {IMG_ID}, "f"Tên sản phẩm: {product_name}, Caption: {caption_text}")
-        open_and_download_video(url)
-        open_tiktok_app()
-        change_account(IMG_ACC, IMG_ID)
-        upload_video_to_tiktok()
-        add_link(devices_id, product_name=product_name, caption_text=caption_text,url=url)
-    
- 
+
+        # Kiểm tra dữ liệu bắt buộc
+        if not devices_id or not url or not IMG_ACC or not IMG_ID:
+            print(f"⚠️ Dòng {i} thiếu dữ liệu bắt buộc -> Bỏ qua")
+            continue
+
+        print(f"Thiết bị: {devices_id}\n"
+              f"URL: {url}\n"
+              f"Ảnh acc: {IMG_ACC}\n"
+              f"Ảnh id: {IMG_ID}\n"
+              f"Tên SP: {product_name}\n"
+              f"Caption: {caption_text}")
+
+        # Các bước upload
+        try:
+            if not open_and_download_video(url):
+                print("❌ Không tải được video -> bỏ qua dòng này")
+                continue
+
+            if not open_tiktok_app():
+                print("❌ Không mở được TikTok -> bỏ qua dòng này")
+                continue
+
+            if not change_account(IMG_ACC, IMG_ID):
+                print("❌ Không đổi được tài khoản -> bỏ qua dòng này")
+                continue
+
+            upload_video_to_tiktok()
+            add_link(devices_id, product_name=product_name,
+                     caption_text=caption_text, url=url)
+
+            print(f"✅ Hoàn tất xử lý cho dòng {i}")
+
+        except Exception as e:
+            print(f"❌ Lỗi khi xử lý dòng {i}: {e}")
+            continue

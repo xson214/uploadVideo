@@ -216,7 +216,7 @@ class CSVGUI:
         # Checkbox check dash
         self.check_dash = tk.BooleanVar()
         self.check_dash_checkbox = tk.Checkbutton(
-            options_frame, text="✅ Check dash", variable=self.check_dash,
+            options_frame, text="Check dash", variable=self.check_dash,
             bg='white', fg='#2c3e50', selectcolor='#3498db', font=('Arial', 9)
         )
         self.check_dash_checkbox.pack(anchor='w')

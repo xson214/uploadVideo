@@ -32,6 +32,32 @@ def adb_screencap(filename="screen.png"):
     with open(filename, "wb") as f:
         subprocess.run(["adb", "exec-out", "screencap", "-p"], stdout=f)
     return filename
+def find_template_in_screenshot(template_path, screenshot="screen.png", threshold=0.8):
+    """Tìm icon trong ảnh bằng template matching"""
+    img_rgb = cv2.imread(screenshot)
+    template = cv2.imread(template_path)
+
+    if img_rgb is None or template is None:
+        print(f"❌ Không load được ảnh: {template_path}")
+        return None
+
+    h, w = template.shape[:2]
+    result = cv2.matchTemplate(img_rgb, template, cv2.TM_CCOEFF_NORMED)
+    loc = np.where(result >= threshold)
+    min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
+    
+    if len(loc[0]) > 0:
+        pt = (loc[1][0] + w // 2, loc[0][0] + h // 2)
+        print(f"👉 Found {os.path.basename(template_path)} at {pt} with accuracy {max_val:.2f}")
+
+        # Vẽ ô highlight để debug
+        cv2.rectangle(img_rgb, (pt[0]-w//2, pt[1]-h//2), (pt[0]+w//2, pt[1]+h//2), (0,0,255), 3)
+        cv2.imwrite("debug_match.png", img_rgb)
+
+        return True
+    else:
+        print(f"❌ Không tìm thấy {template_path}")
+        return False
 
 def find_and_tap(template_path, screenshot="screen.png", threshold=0.8, long_press=False):
     """Tìm icon trong màn hình bằng template matching và tap"""
@@ -45,10 +71,11 @@ def find_and_tap(template_path, screenshot="screen.png", threshold=0.8, long_pre
     h, w = template.shape[:2]
     result = cv2.matchTemplate(img_rgb, template, cv2.TM_CCOEFF_NORMED)
     loc = np.where(result >= threshold)
-
+    min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
+    
     if len(loc[0]) > 0:
         pt = (loc[1][0] + w // 2, loc[0][0] + h // 2)
-        print(f"👉 Found {os.path.basename(template_path)} at {pt}")
+        print(f"👉 Found {os.path.basename(template_path)} at {pt} with accuracy {max_val:.2f}")
 
         # Vẽ ô highlight để debug
         cv2.rectangle(img_rgb, (pt[0]-w//2, pt[1]-h//2), (pt[0]+w//2, pt[1]+h//2), (0,0,255), 3)
@@ -120,7 +147,7 @@ def open_tiktok_app():
                 time.sleep(5)
 
                 adb_screencap() 
-                find_and_tap(os.path.join(ICON_DIR, "profile.jpg"), long_press=False)
+                find_and_tap(os.path.join(ICON_DIR, "profile.jpg"),long_press=False)
                 return True
             else:
                 print(f"❌ Lỗi khi mở ứng dụng TikTok với package {pkg}:")
@@ -351,10 +378,13 @@ if __name__ == "__main__":
             if not open_tiktok_app():
                 print("❌ Không mở được TikTok -> bỏ qua dòng này")
                 continue
-
-            if not change_account(IMG_ACC, IMG_ID):
-                print("❌ Không đổi được tài khoản -> bỏ qua dòng này")
-                continue
+            adb_screencap()
+            if not find_template_in_screenshot(IMG_ID, threshold=0.8):
+                if not change_account(IMG_ACC, IMG_ID):
+                    print("❌ Không đổi được tài khoản -> bỏ qua dòng này")
+                    continue
+            else:
+                print("✅ Tài khoản đã đúng, không cần đổi")    
 
             upload_video_to_tiktok()
             add_link(devices_id, product_name=product_name,

@@ -97,13 +97,13 @@ def find_and_tap(template_path, screenshot="screen.png", threshold=0.8, long_pre
     else:
         print(f"❌ Không tìm thấy {template_path}")
         return False     
-def open_and_download_video(url):
+def open_and_download_video(devices_id, url):
     """Mở URL trên thiết bị Android qua adb shell"""
     # Lấy tên file từ URL
     filename = os.path.basename(url.split("?")[0])
     try:
         result = subprocess.run(
-            ["adb", "shell", "am", "start", "-a", "android.intent.action.VIEW", "-d", url],
+            ["adb", "-s",devices_id,"shell", "am", "start", "-a", "android.intent.action.VIEW", "-d", url],
             capture_output=True,
             text=True
         )
@@ -371,7 +371,7 @@ if __name__ == "__main__":
 
         # Các bước upload
         try:
-            if not open_and_download_video(url):
+            if not open_and_download_video(devices_id,url):
                 print("❌ Không tải được video -> bỏ qua dòng này")
                 continue
 

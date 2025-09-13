@@ -49,7 +49,7 @@ def adb_screencap(device_id):
 
 def find_template_in_screenshot(devices_id, template_path, threshold=0.8):
     """Tìm icon trong ảnh bằng template matching"""
-    screenshot="screenshot_devices" + devices_id + "_screen.png"
+    screenshot="screenshot_devices/" + devices_id + "_screen.png"
     img_rgb = cv2.imread(screenshot)
     template = cv2.imread(template_path)
 
@@ -96,17 +96,18 @@ def find_and_tap(devices_id,template_path, threshold=0.6, long_press=False):
 
         # Vẽ ô highlight để debug
         cv2.rectangle(img_rgb, (pt[0]-w//2, pt[1]-h//2), (pt[0]+w//2, pt[1]+h//2), (0,0,255), 3)
+        cv2.circle(img_rgb, pt, 5, (0,255,0), -1)
         cv2.imwrite("debug_match.png", img_rgb)
 
         # Thực hiện thao tác
         if long_press:
             subprocess.run([
-                "adb", "shell",
+                "adb","-s", devices_id ,"shell",
                 f"input swipe {pt[0]} {pt[1]} {pt[0]} {pt[1]} 1000"
             ])
         else:
             subprocess.run([
-                "adb", "shell",
+                "adb","-s",devices_id, "shell",
                 f"input tap {pt[0]} {pt[1]}"
             ])
             time.sleep(5)  # chờ thêm 2 giây sau long press
@@ -129,12 +130,21 @@ def open_and_download_video(devices_id, url):
             print(f"📄 Tên file: {filename}")
             print("⏳ Đang chờ 5 giây để video tải...")
             time.sleep(5)
-            adb_screencap(device_id=devices_id)
-            find_and_tap(devices_id,os.path.join("image","play.png"), long_press=True)
+            adb_screencap(devices_id)
+            find_and_tap(devices_id,os.path.join(ICON_DIR,"3dot.png"), long_press=False)
             time.sleep(1)
             adb_screencap(device_id=devices_id)
-            if find_and_tap(devices_id,os.path.join("./image/download.png"), long_press=False):
-                print("✅ Đã thực hiện tải video.")
+            if find_and_tap(devices_id,os.path.join("./image/downloadvideo.png"), long_press=False):
+                adb_screencap(devices_id)
+                try:
+                    find_and_tap(devices_id,os.path.join(ICON_DIR,"continue.png"), long_press=False)
+                    print("Da cap quyen truy cap bo nho")
+                    adb_screencap(devices_id)
+                    find_and_tap(devices_id,os.path.join(ICON_DIR,"allow.png"))
+                except Exception:
+                    return True          
+            print("✅ Đã thực hiện tải video.")
+            return True
             time.sleep(10)  # chờ thêm 10 giây để đảm bảo video tải xong
         else:
             print(f"❌ Lỗi khi mở URL:")
@@ -155,7 +165,7 @@ def open_tiktok_app(devices_id):
     for pkg in packages:
         try:
             result = subprocess.run(
-                ["adb", "shell", "monkey", "-p", pkg, "-c", "android.intent.category.LAUNCHER", "1"],
+                ["adb","-s",devices_id, "shell", "monkey", "-p", pkg, "-c", "android.intent.category.LAUNCHER", "1"],
                 capture_output=True,
                 text=True
             )
@@ -163,7 +173,7 @@ def open_tiktok_app(devices_id):
                 print(f"✅ Đã mở ứng dụng TikTok trên {devices_id} với package: {pkg}")
                 time.sleep(5)
 
-                adb_screencap(device_id=devices_id) 
+                adb_screencap(devices_id) 
                 find_and_tap(devices_id,os.path.join(ICON_DIR, "profile.png"),long_press=False)
                 return True
             else:
@@ -198,7 +208,7 @@ def account_logined(devices_id):
         cv2.rectangle(img_rgb, (pt[0]-w//2, pt[1]-h//2), (pt[0]+w//2, pt[1]+h//2), (0,0,255), 3)
         cv2.imwrite("debug_match.png", img_rgb)
         subprocess.run([
-            "adb", "shell",
+            "adb","-s",devices_id, "shell",
             f"input tap {pt[0]} {pt[1]}"
         ])
         time.sleep(1)
@@ -210,7 +220,7 @@ def account_logined(devices_id):
 def change_account(devices_id,IMG_ACC, IMG_ID):
     """Thay đổi tài khoản TikTok"""
     adb_screencap(device_id=devices_id) 
-    account_logined()
+    account_logined(devices_id)
     adb_screencap(device_id=devices_id)
     if find_and_tap(devices_id,IMG_ACC,long_press=False):
         print("✅ Đã Login tài khoản " + IMG_ACC)
@@ -229,7 +239,7 @@ def change_account(devices_id,IMG_ACC, IMG_ID):
 def tap_in(x=None, y=None, x_ratio=None, y_ratio=None):
     # Lấy kích thước màn hình từ adb
     result = subprocess.run(
-        ["adb", "shell", "wm", "size"],
+        ["adb","-s",devices_id, "shell", "wm", "size"],
         capture_output=True,
         text=True
     )
@@ -258,9 +268,7 @@ def tap_in(x=None, y=None, x_ratio=None, y_ratio=None):
 
     # Thực hiện tap
     subprocess.run([
-        "adb", "shell",
-        f"input tap {x} {y}"
-    ])
+        "adb","-s",devices_id,f"input tap {x} {y}"])
     print(f"👉 Tap tại ({x},{y})")
     time.sleep(1)
     screenshot = "screen.jpg"
@@ -302,10 +310,10 @@ def add_link(devices_id, product_name, caption_text,url):
     find_and_tap(os.path.join(ICON_DIR, "search.png"), long_press=False)
     time.sleep(1)
     subprocess.run([
-        "adb", "shell", "am", "broadcast","-a", "ADB_INPUT_TEXT","--es", "msg",f"'{product_name}'"
+        "adb","-s ",devices_id,"am", "broadcast","-a", "ADB_INPUT_TEXT","--es", "msg",f"'{product_name}'"
     ])
     subprocess.run([
-        "adb", "shell","input keyevent 66"  # 66 là mã keyevent cho Enter
+        "adb","-s",devices_id,"input keyevent 66"  # 66 là mã keyevent cho Enter
     ])
     time.sleep(1)
     adb_screencap(device_id=devices_id)
@@ -318,17 +326,16 @@ def add_link(devices_id, product_name, caption_text,url):
     time.sleep(1)
     adb_screencap(device_id=devices_id)
     subprocess.run([
-            "adb", "shell","am","broadcast","-a","ADB_CLEAR_TEXT",
+            "adb","-s",devices_id,"am","broadcast","-a","ADB_CLEAR_TEXT",
     ])
     time.sleep(1)
     subprocess.run([
-        "adb", "shell", "am", "broadcast",
+        "adb","-s" ,devices_id,"am", "broadcast",
         "-a", "ADB_INPUT_TEXT",
         "--es", "msg", "'Mua ở đây nha'"
     ])
     subprocess.run([
-        "adb", "shell",
-        "input keyevent 66"  # 66 là mã keyevent cho Enter
+        "adb","-s",devices_id,"input keyevent 66"  # 66 là mã keyevent cho Enter
     ])
     adb_screencap(device_id=devices_id)
     while(1):       
@@ -341,7 +348,7 @@ def add_link(devices_id, product_name, caption_text,url):
     adb_screencap(device_id=devices_id)
     if find_and_tap(devices_id,os.path.join(ICON_DIR, "caption.png"), long_press=False):
         if subprocess.run([
-          "adb", "shell", "am", "broadcast","-a", "ADB_INPUT_TEXT","--es", "msg",f"'{caption_text}'"
+          "adb","-s ,devices_id,""am", "broadcast","-a", "ADB_INPUT_TEXT","--es", "msg",f"'{caption_text}'"
         ]):
             subprocess.run([
             "adb","-s",f"{devices_id}", "shell","ime", "set", "com.samsung.android.honeyboard/.service.HoneyBoardService"

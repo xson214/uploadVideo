@@ -208,7 +208,7 @@ def account_logined(devices_id):
     loc = np.where(result >= threshold)
 
     if len(loc[0]) > 0:
-        pt = (loc[1][0] + w // 2 -90, loc[0][0] + h // 2 + 90)  # trừ 90 pixel theo chiều x, cộng 90 pixel theo chiều y
+        pt = (loc[1][0] + w // 2 -60, loc[0][0] + h // 2 + 120)  # trừ 90 pixel theo chiều x, cộng 90 pixel theo chiều y
         print(f"👉 Found plus.png at {pt} (đã -90 pixel x, +60 pixel y)")
         # Vẽ ô highlight để debug
         cv2.rectangle(img_rgb, (pt[0]-w//2, pt[1]-h//2), (pt[0]+w//2, pt[1]+h//2), (0,0,255), 3)
@@ -425,9 +425,8 @@ if __name__ == "__main__":
             else:
                 print("✅ Tài khoản đã đúng, không cần đổi")    
 
-            upload_video_to_tiktok(devices_id)
-            add_link(devices_id, product_name=product_name,
-                     caption_text=caption_text, url=url)
+            #upload_video_to_tiktok(devices_id)
+            #add_link(devices_id, product_name=product_name,caption_text=caption_text, url=url)
 
             print(f"✅ Hoàn tất xử lý cho dòng {i}")
 

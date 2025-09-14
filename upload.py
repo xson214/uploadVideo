@@ -5,6 +5,8 @@ import numpy as np
 import time
 import dotenv
 from tinydb import TinyDB, Query
+from PIL import Image
+import io
 
 X_ratio=0.8
 Y_ratio=0.8
@@ -95,7 +97,10 @@ def find_and_tap(devices_id,template_path, threshold=0.6, long_press=False):
         print(f"👉 Found {os.path.basename(template_path)} at {pt} with accuracy {max_val:.2f}")
 
         # Vẽ ô highlight để debug
-        cv2.rectangle(img_rgb, (pt[0]-w//2, pt[1]-h//2), (pt[0]+w//2, pt[1]+h//2), (0,0,255), 3)
+        cv2.rectangle(img_rgb,
+              (pt[0]-w//2, pt[1]-h//2),
+              (pt[0]+w//2, pt[1]+h//2),
+              (0,255,255), 3) 
         cv2.circle(img_rgb, pt, 5, (0,255,0), -1)
         cv2.imwrite("debug_match.png", img_rgb)
 
@@ -171,10 +176,11 @@ def open_tiktok_app(devices_id):
             )
             if result.returncode == 0:
                 print(f"✅ Đã mở ứng dụng TikTok trên {devices_id} với package: {pkg}")
-                time.sleep(5)
+                time.sleep(10)
 
                 adb_screencap(devices_id) 
-                find_and_tap(devices_id,os.path.join(ICON_DIR, "profile.png"),long_press=False)
+                tap_in(devices_id, x_ratio=0.95, y_ratio=0.95)
+                # find_and_tap(devices_id,os.path.join(ICON_DIR, "profile.png"),long_press=False)
                 return True
             else:
                 print(f"❌ Lỗi khi mở ứng dụng TikTok với package {pkg}:")
@@ -236,24 +242,17 @@ def change_account(devices_id,IMG_ACC, IMG_ID):
     else:
         print(f"✅ Tài khoản hiện tại ({profile_id}) khớp với tài khoản đăng nhập ({acc_id}).")
         return True
-def tap_in(x=None, y=None, x_ratio=None, y_ratio=None):
-    # Lấy kích thước màn hình từ adb
-    result = subprocess.run(
-        ["adb","-s",devices_id, "shell", "wm", "size"],
-        capture_output=True,
-        text=True
-    )
-    if result.returncode != 0:
-        print("❌ Không lấy được kích thước màn hình")
-        return False
-
-    output = result.stdout.strip()
-    # Ví dụ output: "Physical size: 1080x2400"
+def tap_in(devices_id, x=None, y=None, x_ratio=None, y_ratio=None):
     try:
-        size_str = output.split(":")[1].strip()
-        width, height = map(int, size_str.split("x"))
+        screen_image = adb_screencap(devices_id)
+        width = None
+        height = None
+        with Image.open(screen_image) as img:
+            width = img.width
+            height = img.height
+        print(width, height)
     except Exception as e:
-        print(f"❌ Parse lỗi wm size: {output}, error: {e}")
+        print(f"❌ Không lấy đc kích thước màn hình {e}")
         return False
 
     # Nếu dùng ratio
@@ -268,16 +267,18 @@ def tap_in(x=None, y=None, x_ratio=None, y_ratio=None):
 
     # Thực hiện tap
     subprocess.run([
-        "adb","-s",devices_id,f"input tap {x} {y}"])
+        "adb", "-s", devices_id, "shell", "input", "tap", str(x), str(y)
+    ])
     print(f"👉 Tap tại ({x},{y})")
+
     time.sleep(1)
-    screenshot = "screen.jpg"
-    img = cv2.imread(screenshot)
-    if img is not None:
-        cv2.circle(img, (x, y), 10, (0, 255, 0), -1)
-        cv2.imwrite("debug_match.png", img)
-    else:
-        print("❌ Không load được screen.jpg để vẽ chấm xanh.")
+    # screenshot = "screen.jpg"
+    # img = cv2.imread(screenshot)
+    # if img is not None:
+    #     cv2.circle(img, (x, y), 10, (0, 255, 0), -1)
+    #     cv2.imwrite("debug_match.png", img)
+    # else:
+    #     print("❌ Không load được screen.jpg để vẽ chấm xanh.")
 
     return True
         
@@ -285,58 +286,71 @@ def upload_video_to_tiktok(devices_id):
     adb_screencap(device_id=devices_id)
     if find_and_tap(devices_id,os.path.join(ICON_DIR, "newvideo.png"), long_press=False):
         adb_screencap(device_id=devices_id)
-        tap_in(x_ratio=X_ratio, y_ratio=Y_ratio)  # Tap 
+        tap_in(devices_id, x_ratio=X_ratio, y_ratio=Y_ratio)  # Tap 
         time.sleep(1)
         adb_screencap(device_id=devices_id)
-        tap_in(x_ratio=X_ratio_pickup, y_ratio=Y_ratio_pickup)  # Chọn video đầu tiên
+        tap_in(devices_id, x_ratio=X_ratio_pickup, y_ratio=Y_ratio_pickup)  # Chọn video đầu tiên
         print("✅ Đã chọn video đầu tiên")
         time.sleep(1)
         adb_screencap(device_id=devices_id)
-        find_and_tap(devices_id,os.path.join(ICON_DIR, "next2.png"), long_press=False)
+        find_and_tap(devices_id,os.path.join(ICON_DIR, "next.png"), long_press=False)
         adb_screencap(device_id=devices_id)
-        find_and_tap(devices_id,os.path.join(ICON_DIR, "next2.png"), long_press=False)
-        adb_screencap(device_id=devices_id)
-
-def add_link(devices_id, product_name, caption_text,url):
-    if subprocess.run(["adb", "-s", f"{devices_id}", "shell", "ime", "set", "com.android.adbkeyboard/.AdbIME"]):
+        find_and_tap(devices_id,os.path.join(ICON_DIR, "next.png"), long_press=False)
+        # adb_screencap(device_id=devices_id)
+        # find_and_tap(devices_id,os.path.join(ICON_DIR, "next.png"), long_press=False)
+        
+def add_link(device_id, product_name, caption_text,url):
+    if subprocess.run(["adb", "-s", f"{device_id}", "shell", "ime", "set", "com.android.adbkeyboard/.AdbIME"]):
         print("thiết bị " + devices_id + " đã chuyển sang adbkeyboard")
     time.sleep(1)
-    adb_screencap(device_id=devices_id)
-    find_and_tap(os.path.join(ICON_DIR, "add_link.png"), long_press=False)
-    adb_screencap(device_id=devices_id)
-    find_and_tap(os.path.join(ICON_DIR, "shop.png"), long_press=False)
+    adb_screencap(device_id=device_id)
+    find_and_tap(device_id, os.path.join(ICON_DIR, "add_link.png"), long_press=False)
+    adb_screencap(device_id=device_id)
+    find_and_tap(device_id, os.path.join(ICON_DIR, "shop.png"), long_press=False)
     time.sleep(3)
-    adb_screencap(device_id=devices_id)
-    find_and_tap(os.path.join(ICON_DIR, "search.png"), long_press=False)
+    adb_screencap(device_id=device_id)
+    find_and_tap(device_id, os.path.join(ICON_DIR, "search.png"), long_press=False)
     time.sleep(1)
+    subprocess.run(
+        ["adb", "-s", device_id, "shell", "am", "broadcast", "-a", "ADB_CLEAR_TEXT"],
+        check=True
+    )
+    time.sleep(1)
+    print('product_name', product_name)
     subprocess.run([
-        "adb","-s ",devices_id,"am", "broadcast","-a", "ADB_INPUT_TEXT","--es", "msg",f"'{product_name}'"
-    ])
-    subprocess.run([
-        "adb","-s",devices_id,"input keyevent 66"  # 66 là mã keyevent cho Enter
+        "adb","-s", device_id, "shell", "am", "broadcast","-a", "ADB_INPUT_TEXT","--es", "msg",f"'{product_name}'"
     ])
     time.sleep(1)
-    adb_screencap(device_id=devices_id)
-    if not find_and_tap(devices_id,os.path.join(ICON_DIR, "remind.png"), long_press=False):
-        find_and_tap(devices_id,os.path.join(ICON_DIR, "add.png"), long_press=False)
+    subprocess.run(
+        ["adb", "-s", device_id, "shell", "input", "keyevent", "66"],
+        check=True
+    )
+    time.sleep(1)
+    adb_screencap(device_id=device_id)
+    if not find_and_tap(device_id,os.path.join(ICON_DIR, "remind.png"), long_press=False):
+        find_and_tap(device_id,os.path.join(ICON_DIR, "add.png"), long_press=False)
         time.sleep(1)
-        adb_screencap(device_id=devices_id)
+        adb_screencap(device_id=device_id)
     else:
-        find_and_tap(devices_id,os.path.join(ICON_DIR, "remind.png"), long_press=False)
+        find_and_tap(device_id,os.path.join(ICON_DIR, "remind.png"), long_press=False)
     time.sleep(1)
-    adb_screencap(device_id=devices_id)
-    subprocess.run([
-            "adb","-s",devices_id,"am","broadcast","-a","ADB_CLEAR_TEXT",
-    ])
+    adb_screencap(device_id=device_id)
+    subprocess.run(
+        ["adb", "-s", device_id, "shell", "am", "broadcast", "-a", "ADB_CLEAR_TEXT"],
+        check=True
+    )
     time.sleep(1)
     subprocess.run([
-        "adb","-s" ,devices_id,"am", "broadcast",
+        "adb","-s" ,device_id,"shell", "am", "broadcast",
         "-a", "ADB_INPUT_TEXT",
-        "--es", "msg", "'Mua ở đây nha'"
+        "--es", "msg", "'Mua ở đây'"
     ])
-    subprocess.run([
-        "adb","-s",devices_id,"input keyevent 66"  # 66 là mã keyevent cho Enter
-    ])
+    time.sleep(1)
+    subprocess.run(
+        ["adb", "-s", device_id, "shell", "input", "keyevent", "66"],
+        check=True
+    )
+    time.sleep(1)
     adb_screencap(device_id=devices_id)
     while(1):       
         find_and_tap(devices_id,os.path.join(ICON_DIR, "confirm.png"), long_press=False)
@@ -348,20 +362,21 @@ def add_link(devices_id, product_name, caption_text,url):
     adb_screencap(device_id=devices_id)
     if find_and_tap(devices_id,os.path.join(ICON_DIR, "caption.png"), long_press=False):
         if subprocess.run([
-          "adb","-s ,devices_id,""am", "broadcast","-a", "ADB_INPUT_TEXT","--es", "msg",f"'{caption_text}'"
+          "adb","-s", f"{device_id}", "shell", "am", "broadcast","-a", "ADB_INPUT_TEXT","--es", "msg",f"'{caption_text + " "}'"
         ]):
             subprocess.run([
-            "adb","-s",f"{devices_id}", "shell","ime", "set", "com.samsung.android.honeyboard/.service.HoneyBoardService"
+            "adb","-s",f"{device_id}", "shell", "ime", "set", "com.samsung.android.honeyboard/.service.HoneyBoardService"
             ])
             time.sleep(1)
-    adb_screencap(device_id=devices_id)
-    if find_and_tap(devices_id,os.path.join(ICON_DIR, "post.png"), long_press=False):
+            
+    adb_screencap(device_id=device_id)
+    if find_and_tap(device_id,os.path.join(ICON_DIR, "post.png"), long_press=False):
         print("✅ Đã đăng video lên TikTok")
         time.sleep(10)  # chờ thêm 10 giây để đảm bảo video đăng xong
         video_file_name = os.path.basename(url.split("?")[0])
         path = f"/sdcard/Download/{video_file_name}"
         if subprocess.run([
-                "adb","-s",f"{devices_id}", "shell","rm","-rf",path
+                "adb","-s",f"{device_id}", "shell","rm","-rf",path
         ]):
             print(f"✅ Đã xóa video {video_file_name} khỏi thiết bị.") 
 
@@ -395,9 +410,9 @@ if __name__ == "__main__":
 
         # Các bước upload
         try:
-            if not open_and_download_video(devices_id,url):
-                print("❌ Không tải được video -> bỏ qua dòng này")
-                continue
+            # if not open_and_download_video(devices_id,url):
+            #     print("❌ Không tải được video -> bỏ qua dòng này")
+            #     continue
 
             if not open_tiktok_app(devices_id):
                 print("❌ Không mở được TikTok -> bỏ qua dòng này")

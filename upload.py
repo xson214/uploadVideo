@@ -192,6 +192,7 @@ def open_tiktok_app(devices_id):
     return False
 def account_logined(devices_id):
     """Bấm vào icon plus.png sau khi cộng 90 pixel theo chiều y, trừ 90 pixel theo chiều x"""
+    time.sleep(5)
     adb_screencap(device_id=devices_id)
     screenshot = "screenshot_devices/" + devices_id + "_screen.png"
     template_path = os.path.join(ICON_DIR, "plus.png")
@@ -223,25 +224,29 @@ def account_logined(devices_id):
         print("❌ Không tìm thấy plus.png")
         return False
     
-def change_account(devices_id,IMG_ACC, IMG_ID):
+def change_account(devices_id, IMG_ACC, IMG_ID):
     """Thay đổi tài khoản TikTok"""
-    adb_screencap(device_id=devices_id) 
     account_logined(devices_id)
+    
     adb_screencap(device_id=devices_id)
-    if find_and_tap(devices_id,IMG_ACC,long_press=False):
+    if find_and_tap(devices_id, IMG_ACC, long_press=False):
         print("✅ Đã Login tài khoản " + IMG_ACC)
         acc_id = os.path.splitext(os.path.basename(IMG_ACC))[0]  # lấy tên file không có đuôi
         time.sleep(10)
         adb_screencap(device_id=devices_id)
-
-    if find_and_tap(devices_id,os.path.join(ICON_DIR, "profile.png"), long_press=False):
-        adb_screencap(device_id=devices_id)
-        profile_id =os.path.splitext(os.path.basename(IMG_ID))[0]  # lấy tên file không có đuôi
-    if acc_id != profile_id:
-        print(f"⚠️ Tài khoản hiện tại ({profile_id}) khác với tài khoản đăng nhập ({acc_id}). Vui lòng kiểm tra lại.")
-    else:
-        print(f"✅ Tài khoản hiện tại ({profile_id}) khớp với tài khoản đăng nhập ({acc_id}).")
-        return True
+        
+    tap_in(devices_id, x_ratio=0.95, y_ratio=0.95)
+    return True
+    # if find_and_tap(devices_id,os.path.join(ICON_DIR, "profile.png"), long_press=False):
+    #     adb_screencap(device_id=devices_id)
+    #     profile_id =os.path.splitext(os.path.basename(IMG_ID))[0]  # lấy tên file không có đuôi
+    
+    # if acc_id != profile_id:
+    #     print(f"⚠️ Tài khoản hiện tại ({profile_id}) khác với tài khoản đăng nhập ({acc_id}). Vui lòng kiểm tra lại.")
+    #     return False
+    # else:
+    #     print(f"✅ Tài khoản hiện tại ({profile_id}) khớp với tài khoản đăng nhập ({acc_id}).")
+    #     return True
 def tap_in(devices_id, x=None, y=None, x_ratio=None, y_ratio=None):
     try:
         screen_image = adb_screencap(devices_id)
@@ -271,7 +276,7 @@ def tap_in(devices_id, x=None, y=None, x_ratio=None, y_ratio=None):
     ])
     print(f"👉 Tap tại ({x},{y})")
 
-    time.sleep(1)
+    time.sleep(5)
     # screenshot = "screen.jpg"
     # img = cv2.imread(screenshot)
     # if img is not None:
@@ -281,23 +286,83 @@ def tap_in(devices_id, x=None, y=None, x_ratio=None, y_ratio=None):
     #     print("❌ Không load được screen.jpg để vẽ chấm xanh.")
 
     return True
+def adb_clear_downloads(device_id):
+    """
+    Xóa toàn bộ file trong thư mục /sdcard/Download.
+
+    Args:
+        device_id (str): ID của thiết bị adb
+    """
+    clear_cmd = ["adb", "-s", device_id, "shell", "rm", "-rf", "/sdcard/Download/*"]
+    result = subprocess.run(clear_cmd, capture_output=True, text=True)
+
+    if result.returncode != 0:
+        raise RuntimeError(f"❌ ADB clear lỗi: {result.stderr.strip()}")
+
+    print("🗑️ Đã xóa toàn bộ file trong /sdcard/Download")
+    
+def adb_push_file(device_id, local_path):
+    """
+    Push file vào thư mục /sdcard/Download và scan để hiện trong Gallery.
+
+    Args:
+        device_id (str): ID của thiết bị adb (vd: "ce11160b6411822f05")
+        local_path (str): Đường dẫn file trên PC
+    """
+    if not os.path.exists(local_path):
+        raise FileNotFoundError(f"Không tìm thấy file: {local_path}")
+
+    filename = os.path.basename(local_path)
+    remote_path = f"/sdcard/Download/{filename}"
+
+    # Push file
+    push_cmd = ["adb", "-s", device_id, "push", local_path, remote_path]
+    result = subprocess.run(push_cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError(f"ADB push lỗi: {result.stderr.strip()}")
+
+    # Quét lại để Gallery thấy file
+    scan_cmd = [
+        "adb", "-s", device_id, "shell", "am", "broadcast",
+        "-a", "android.intent.action.MEDIA_SCANNER_SCAN_FILE",
+        "-d", f"file://{remote_path}"
+    ]
+    subprocess.run(scan_cmd, capture_output=True, text=True)
+
+    print(f"✅ Đã push file: {local_path} → {remote_path}")
+    print("👉 File đã sẵn sàng trong Gallery.")
+
+
+def adb_delete_file(device_id, filename):
+    """
+    Xóa file trong thư mục /sdcard/Download.
+
+    Args:
+        device_id (str): ID của thiết bị adb
+        filename (str): Tên file cần xóa (vd: "test.mp4")
+    """
+    remote_path = f"/sdcard/Download/{filename}"
+
+    rm_cmd = ["adb", "-s", device_id, "shell", "rm", remote_path]
+    result = subprocess.run(rm_cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError(f"ADB rm lỗi: {result.stderr.strip()}")
+
+    print(f"🗑️ Đã xóa file: {remote_path}")
         
 def upload_video_to_tiktok(devices_id):
+    tap_in(devices_id, x_ratio=0.5, y_ratio=0.95)
     adb_screencap(device_id=devices_id)
-    if find_and_tap(devices_id,os.path.join(ICON_DIR, "newvideo.png"), long_press=False):
-        adb_screencap(device_id=devices_id)
-        tap_in(devices_id, x_ratio=X_ratio, y_ratio=Y_ratio)  # Tap 
-        time.sleep(1)
-        adb_screencap(device_id=devices_id)
-        tap_in(devices_id, x_ratio=X_ratio_pickup, y_ratio=Y_ratio_pickup)  # Chọn video đầu tiên
-        print("✅ Đã chọn video đầu tiên")
-        time.sleep(1)
-        adb_screencap(device_id=devices_id)
-        find_and_tap(devices_id,os.path.join(ICON_DIR, "next.png"), long_press=False)
-        adb_screencap(device_id=devices_id)
-        find_and_tap(devices_id,os.path.join(ICON_DIR, "next.png"), long_press=False)
-        # adb_screencap(device_id=devices_id)
-        # find_and_tap(devices_id,os.path.join(ICON_DIR, "next.png"), long_press=False)
+    tap_in(devices_id, x_ratio=X_ratio, y_ratio=Y_ratio)  # Tap 
+    time.sleep(1)
+    adb_screencap(device_id=devices_id)
+    tap_in(devices_id, x_ratio=X_ratio_pickup, y_ratio=Y_ratio_pickup)  # Chọn video đầu tiên
+    print("✅ Đã chọn video đầu tiên")
+    time.sleep(1)
+    adb_screencap(device_id=devices_id)
+    find_and_tap(devices_id,os.path.join(ICON_DIR, "next.png"), long_press=False)
+    adb_screencap(device_id=devices_id)
+    find_and_tap(devices_id,os.path.join(ICON_DIR, "next.png"), long_press=False)
         
 def add_link(device_id, product_name, caption_text,url):
     if subprocess.run(["adb", "-s", f"{device_id}", "shell", "ime", "set", "com.android.adbkeyboard/.AdbIME"]):
@@ -413,21 +478,29 @@ if __name__ == "__main__":
             # if not open_and_download_video(devices_id,url):
             #     print("❌ Không tải được video -> bỏ qua dòng này")
             #     continue
+            adb_clear_downloads(devices_id)
+            
+            adb_push_file(devices_id, r"D:\TOOL\new upload video\uploadVideo\source_video\AFF.mp4")
 
             if not open_tiktok_app(devices_id):
                 print("❌ Không mở được TikTok -> bỏ qua dòng này")
                 continue
+            time.sleep(5)
             adb_screencap(device_id=devices_id)
-            if not find_template_in_screenshot(devices_id,IMG_ID, threshold=0.8):
-                if not change_account(devices_id,IMG_ACC, IMG_ID):
+            
+            if not find_template_in_screenshot(devices_id, IMG_ID, threshold=0.8):
+                if not change_account(devices_id, IMG_ACC, IMG_ID):
                     print("❌ Không đổi được tài khoản -> bỏ qua dòng này")
                     continue
             else:
                 print("✅ Tài khoản đã đúng, không cần đổi")    
 
-            #upload_video_to_tiktok(devices_id)
-            #add_link(devices_id, product_name=product_name,caption_text=caption_text, url=url)
-
+            upload_video_to_tiktok(devices_id)
+            
+            add_link(devices_id, product_name=product_name,caption_text=caption_text, url=url)
+            
+            adb_delete_file(devices_id, "AFF.mp4")
+            
             print(f"✅ Hoàn tất xử lý cho dòng {i}")
 
         except Exception as e:

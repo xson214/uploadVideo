@@ -234,9 +234,9 @@ def change_account(devices_id, IMG_ACC, IMG_ID):
         acc_id = os.path.splitext(os.path.basename(IMG_ACC))[0]  # lấy tên file không có đuôi
         time.sleep(10)
         adb_screencap(device_id=devices_id)
-        
-    tap_in(devices_id, x_ratio=0.95, y_ratio=0.95)
-    return True
+        tap_in(devices_id, x_ratio=0.95, y_ratio=0.95)
+        return True
+    return False
     # if find_and_tap(devices_id,os.path.join(ICON_DIR, "profile.png"), long_press=False):
     #     adb_screencap(device_id=devices_id)
     #     profile_id =os.path.splitext(os.path.basename(IMG_ID))[0]  # lấy tên file không có đuôi

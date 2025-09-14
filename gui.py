@@ -10,7 +10,7 @@ class CSVGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("🗂️ AuTo Upload Tiktok")
-        self.root.geometry("1400x900")
+        self.root.geometry("1800x900")  # Tăng width lên 1800px để chứa 9 cột
         self.root.configure(bg='#2c3e50')
         
         # Khởi tạo TinyDB
@@ -144,10 +144,6 @@ class CSVGUI:
                                        command=self.import_csv, style='Modern.TButton')
         self.import_button.pack(side=tk.LEFT, padx=2)
         
-        self.save_button = ttk.Button(file_button_frame, text="💾 Save to DB", 
-                                     command=self.save_to_db, style='Success.TButton')
-        self.save_button.pack(side=tk.LEFT, padx=2)
-        
         # Data operations card
         data_card = tk.Frame(control_container, bg='white', relief='solid', bd=1)
         data_card.pack(side=tk.LEFT, padx=(0, 10), pady=5)
@@ -249,9 +245,10 @@ class CSVGUI:
         tree_frame = tk.Frame(table_container, bg='white')
         tree_frame.pack(fill=tk.BOTH, expand=True, padx=1, pady=1)
         
-        # Treeview với scrollbars
+        # Updated Treeview với 9 cột (thêm "Path Output")
         self.tree = ttk.Treeview(tree_frame, columns=(
-            "Tên thiết bị", "Tên tk", "Ảnh acc", "Ảnh id", "Ảnh sản phẩm", "Caption", "Url"
+            "Tên thiết bị", "Tên tk", "Ảnh acc", "Ảnh id", "Ảnh sản phẩm", "Caption", 
+            "Path Folder", "Path File TXT", "Path Output"
         ), show="headings", style='Modern.Treeview')
         
         # Scrollbars
@@ -260,20 +257,22 @@ class CSVGUI:
         
         self.tree.configure(yscrollcommand=v_scrollbar.set, xscrollcommand=h_scrollbar.set)
         
-        # Headers với icons
+        # Updated headers với 9 cột bao gồm "Path Output"
         headers = {
             "Tên thiết bị": "📱 Tên thiết bị",
             "Tên tk": "👤 Tên tk", 
             "Ảnh acc": "🖼️ Ảnh acc",
             "Ảnh id": "🆔 Ảnh id",
-            "Ảnh sản phẩm": "📸 Ảnh sản phẩm",
+            "Ảnh sản phẩm": "📸Tên sản phẩm",
             "Caption": "📝 Caption",
-            "Url": "🔗 Url"
+            "Path Folder": "📁 Path Folder",
+            "Path File TXT": "📄 Path File TXT",
+            "Path Output": "🚀 Path Output"
         }
         
         for col in self.tree["columns"]:
             self.tree.heading(col, text=headers[col])
-            self.tree.column(col, width=180, anchor="w")
+            self.tree.column(col, width=160, anchor="w")  # Giảm width xuống 160 để fit 9 cột
         
         # Pack treeview and scrollbars
         self.tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
@@ -306,6 +305,27 @@ class CSVGUI:
         if count is not None:
             self.row_count_label.config(text=f"Rows: {count}")
         self.root.update_idletasks()
+    
+    def auto_save_to_db(self):
+        """Tự động lưu vào database với 9 cột"""
+        try:
+            self.db.truncate()
+            self.db.insert_multiple([{
+                "ten_thiet_bi": row[0],
+                "ten_tk": row[1],
+                "anh_acc": row[2],
+                "anh_id": row[3],
+                "anh_san_pham": row[4],
+                "caption": row[5],
+                "path_folder": row[6],
+                "path_file_txt": row[7],
+                "path_output": row[8] if len(row) > 8 else ""
+            } for row in self.data if any(row)])
+            
+            self.update_status("Auto-saved to database ✅", len(self.data))
+        except Exception as e:
+            self.update_status("Auto-save failed ❌")
+            messagebox.showerror("❌ Error", f"Failed to auto-save data:\n{str(e)}")
     
     # ================== PROCESS CONTROL ==================
     def run_process(self):
@@ -355,23 +375,27 @@ class CSVGUI:
                 prev_device = None
                 row_count = 0
                 for row in reader:
-                    if len(row) < 7:
-                        continue
+                    # Kiểm tra tối thiểu 9 cột
+                    if len(row) < 9:
+                        # Thêm cột trống nếu thiếu
+                        while len(row) < 9:
+                            row.append("")
+                    
                     device = row[0].strip()
                     if device == '' and prev_device:
                         row[0] = prev_device
                     else:
                         if prev_device and prev_device != device:
-                            self.tree.insert("", "end", values=("", "", "", "", "", "", ""))
-                            self.data.append(["", "", "", "", "", "", ""])
+                            self.tree.insert("", "end", values=("", "", "", "", "", "", "", "", ""))
+                            self.data.append(["", "", "", "", "", "", "", "", ""])
                         prev_device = device
-                    self.data.append(row)
-                    self.tree.insert("", "end", values=tuple(row))
+                    self.data.append(row[:9])  # Chỉ lấy 9 cột đầu tiên
+                    self.tree.insert("", "end", values=tuple(row[:9]))
                     row_count += 1
             
             self.update_status("CSV imported successfully! ✅", row_count)
             messagebox.showinfo("✅ Success", f"CSV imported successfully!\nLoaded {row_count} rows.")
-            self.save_to_db()
+            self.auto_save_to_db()  # Tự động lưu sau khi import
         except Exception as e:
             self.update_status("Import failed ❌")
             messagebox.showerror("❌ Error", f"Failed to import CSV:\n{str(e)}")
@@ -399,12 +423,13 @@ class CSVGUI:
             del self.data[index]
             self.tree.delete(selected[0])
             self.update_status("Row deleted ✅", len(self.data))
-            messagebox.showinfo("✅ Success", "Row deleted successfully!")
+            self.auto_save_to_db()  # Tự động lưu sau khi xóa
+            messagebox.showinfo("✅ Success", "Row deleted and auto-saved successfully!")
     
     def edit_window(self, values, is_add=False, selected=None):
         edit_win = tk.Toplevel(self.root)
         edit_win.title("✏️ Edit Row" if not is_add else "➕ Add New Row")
-        edit_win.geometry("800x750")
+        edit_win.geometry("800x950")  # Tăng height lên 950px để chứa field mới
         edit_win.configure(bg='#ecf0f1')
         edit_win.resizable(False, False)
         
@@ -427,8 +452,9 @@ class CSVGUI:
         form_frame = tk.Frame(edit_win, bg='white')
         form_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
         
+        # Updated labels với 9 trường bao gồm Path Output
         labels = ["📱 Tên thiết bị", "👤 Tên tk", "🖼️ Ảnh acc", "🆔 Ảnh id", 
-                 "📸 Ảnh sản phẩm", "📝 Caption", "🔗 Url"]
+                 "📸 Ảnh sản phẩm", "📝 Caption", "📁 Path Folder", "📄 Path File TXT", "🚀 Path Output"]
         entries = []
 
         def get_connected_devices():
@@ -470,20 +496,27 @@ class CSVGUI:
         
         def save_edit():
             new_values = [entry.get() for entry in entries]
+            # Đảm bảo có đủ 9 cột
+            while len(new_values) < 9:
+                new_values.append("")
+            
             if is_add:
                 if self.data and self.data[-1][0] != new_values[0]:
-                    self.tree.insert("", "end", values=("", "", "", "", "", "", ""))
-                    self.data.append(["", "", "", "", "", "", ""])
+                    self.tree.insert("", "end", values=("", "", "", "", "", "", "", "", ""))
+                    self.data.append(["", "", "", "", "", "", "", "", ""])
                 self.tree.insert("", "end", values=tuple(new_values))
                 self.data.append(new_values)
                 self.update_status("Row added ✅", len(self.data))
+                self.auto_save_to_db()  # Tự động lưu sau khi thêm
+                messagebox.showinfo("✅ Success", "Row added and auto-saved successfully!")
             else:
                 index = self.tree.index(selected)
                 self.data[index] = new_values
                 self.tree.item(selected, values=tuple(new_values))
                 self.update_status("Row updated ✅", len(self.data))
+                self.auto_save_to_db()  # Tự động lưu sau khi chỉnh sửa
+                messagebox.showinfo("✅ Success", "Row updated and auto-saved successfully!")
             edit_win.destroy()
-            messagebox.showinfo("✅ Success", "Row saved successfully!")
         
         def cancel_edit():
             edit_win.destroy()
@@ -500,24 +533,9 @@ class CSVGUI:
         cancel_btn.pack(side=tk.RIGHT, padx=5)
     
     def save_to_db(self):
-        try:
-            self.update_status("Saving to database...")
-            self.db.truncate()
-            self.db.insert_multiple([{
-                "ten_thiet_bi": row[0],
-                "ten_tk": row[1],
-                "anh_acc": row[2],
-                "anh_id": row[3],
-                "anh_san_pham": row[4],
-                "caption": row[5],
-                "url": row[6]
-            } for row in self.data if any(row)])
-            
-            self.update_status("Data saved successfully! ✅", len(self.data))
-            messagebox.showinfo("✅ Success", "Data saved to accounts.json successfully!")
-        except Exception as e:
-            self.update_status("Save failed ❌")
-            messagebox.showerror("❌ Error", f"Failed to save data:\n{str(e)}")
+        """Manual save function (kept for compatibility)"""
+        self.auto_save_to_db()
+        messagebox.showinfo("✅ Success", "Data saved to accounts.json successfully!")
     
     def load_from_db(self):
         try:
@@ -527,6 +545,7 @@ class CSVGUI:
             
             records = self.db.all()
             for row in records:
+                # Updated để xử lý schema mới với 9 cột
                 values = (
                     row.get("ten_thiet_bi", ""),
                     row.get("ten_tk", ""),
@@ -534,7 +553,9 @@ class CSVGUI:
                     row.get("anh_id", ""),
                     row.get("anh_san_pham", ""),
                     row.get("caption", ""),
-                    row.get("url", "")
+                    row.get("path_folder", ""),
+                    row.get("path_file_txt", ""),
+                    row.get("path_output", "")
                 )
                 self.tree.insert("", "end", values=values)
                 self.data.append(list(values))

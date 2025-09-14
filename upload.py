@@ -1,12 +1,15 @@
 import subprocess,base64
 import os
 import cv2
+from flask import json
 import numpy as np
 import time
 import dotenv
 from tinydb import TinyDB, Query
 from PIL import Image
 import io
+import concurrent.futures
+import random
 
 X_ratio=0.8
 Y_ratio=0.8
@@ -366,7 +369,7 @@ def upload_video_to_tiktok(devices_id):
         
 def add_link(device_id, product_name, caption_text,url):
     if subprocess.run(["adb", "-s", f"{device_id}", "shell", "ime", "set", "com.android.adbkeyboard/.AdbIME"]):
-        print("thiết bị " + devices_id + " đã chuyển sang adbkeyboard")
+        print("thiết bị " + device_id + " đã chuyển sang adbkeyboard")
     time.sleep(1)
     adb_screencap(device_id=device_id)
     find_and_tap(device_id, os.path.join(ICON_DIR, "add_link.png"), long_press=False)
@@ -416,16 +419,16 @@ def add_link(device_id, product_name, caption_text,url):
         check=True
     )
     time.sleep(1)
-    adb_screencap(device_id=devices_id)
+    adb_screencap(device_id=device_id)
     while(1):       
-        find_and_tap(devices_id,os.path.join(ICON_DIR, "confirm.png"), long_press=False)
-        adb_screencap(device_id=devices_id)
+        find_and_tap(device_id,os.path.join(ICON_DIR, "confirm.png"), long_press=False)
+        adb_screencap(device_id=device_id)
          # Kiểm tra nếu không tìm thấy nữa thì thoát vòng lặp
-        if not find_and_tap(devices_id,os.path.join(ICON_DIR, "confirm.png"), long_press=False):
+        if not find_and_tap(device_id,os.path.join(ICON_DIR, "confirm.png"), long_press=False):
             break   
     time.sleep(1)
-    adb_screencap(device_id=devices_id)
-    if find_and_tap(devices_id,os.path.join(ICON_DIR, "caption.png"), long_press=False):
+    adb_screencap(device_id=device_id)
+    if find_and_tap(device_id,os.path.join(ICON_DIR, "caption.png"), long_press=False):
         if subprocess.run([
           "adb","-s", f"{device_id}", "shell", "am", "broadcast","-a", "ADB_INPUT_TEXT","--es", "msg",f"'{caption_text + " "}'"
         ]):
@@ -445,64 +448,75 @@ def add_link(device_id, product_name, caption_text,url):
         ]):
             print(f"✅ Đã xóa video {video_file_name} khỏi thiết bị.") 
 
-if __name__ == "__main__":
-    if not rows:
-        print("⚠️ Không có dữ liệu trong accounts.json")
-        exit(0)
-
-    for i, row in enumerate(rows, start=1):
+def process_rows(i,row):
         print(f"\n=== Xử lý dòng {i}: {row} ===")
-
         # Đọc thông tin
         devices_id   = row.get("ten_thiet_bi", "").strip()
-        url          = row.get("url", "").strip()
+        path          = row.get("path", "").strip()
         IMG_ACC      = row.get("anh_acc", "").strip()
         IMG_ID       = row.get("anh_id", "").strip()
         product_name = row.get("anh_san_pham", "").strip()
         caption_text = row.get("caption", "").strip()
+        path_file_txt = row.get("path_file_txt", "").strip()
+        path_folder = row.get("path_folder", "").strip()
+        path_output = row.get("path_output", "").strip()
 
         # Kiểm tra dữ liệu bắt buộc
-        if not devices_id or not url or not IMG_ACC or not IMG_ID:
+        if not devices_id or not path or not IMG_ACC or not IMG_ID:
             print(f"⚠️ Dòng {i} thiếu dữ liệu bắt buộc -> Bỏ qua")
-            continue
+            return
 
         print(f"Thiết bị: {devices_id}\n"
-              f"URL: {url}\n"
+              f"path folder: {path}\n"
               f"Ảnh acc: {IMG_ACC}\n"
               f"Ảnh id: {IMG_ID}\n"
               f"Tên SP: {product_name}\n"
-              f"Caption: {caption_text}")
+              f"Caption: {caption_text}\n"
+              f"File caption: {path_file_txt}\n"
+              f"Folder video: {path_folder}\n"
+              f"path_output: {path_output}"
+              )
 
         # Các bước upload
         try:
-            # if not open_and_download_video(devices_id,url):
-            #     print("❌ Không tải được video -> bỏ qua dòng này")
-            #     continue
             adb_clear_downloads(devices_id)
             
-            adb_push_file(devices_id, r"D:\TOOL\new upload video\uploadVideo\source_video\AFF.mp4")
+            adb_push_file(devices_id, path_folder)
 
             if not open_tiktok_app(devices_id):
                 print("❌ Không mở được TikTok -> bỏ qua dòng này")
-                continue
+                return
             time.sleep(5)
             adb_screencap(device_id=devices_id)
             
             if not find_template_in_screenshot(devices_id, IMG_ID, threshold=0.8):
                 if not change_account(devices_id, IMG_ACC, IMG_ID):
                     print("❌ Không đổi được tài khoản -> bỏ qua dòng này")
-                    continue
+                    return
             else:
                 print("✅ Tài khoản đã đúng, không cần đổi")    
 
             upload_video_to_tiktok(devices_id)
             
-            add_link(devices_id, product_name=product_name,caption_text=caption_text, url=url)
+            add_link(devices_id, product_name=product_name,caption_text=caption_text)
             
-            adb_delete_file(devices_id, "AFF.mp4")
+            #adb_delete_file(devices_id, "AFF.mp4")
+            adb_clear_downloads(devices_id) # Xóa file sau khi đăng
             
             print(f"✅ Hoàn tất xử lý cho dòng {i}")
 
         except Exception as e:
             print(f"❌ Lỗi khi xử lý dòng {i}: {e}")
-            continue
+if __name__ == "__main__":
+    if not rows:
+        print("❌ Không có dòng nào trong database -> thoát")
+        exit(0) 
+    # chay song song
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        futures = {executor.submit(process_rows, i, row): i for i, row in enumerate(rows, start=1)}
+        for future in concurrent.futures.as_completed(futures):
+            i = futures[future]
+            try:
+                future.result()
+            except Exception as e:
+                print(f"❌ Lỗi khi xử lý dòng {i}: {e}")    

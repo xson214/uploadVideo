@@ -10,7 +10,7 @@ class CSVGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("🗂️ AuTo Upload Tiktok")
-        self.root.geometry("1800x900")  # Tăng width lên 1800px để chứa 9 cột
+        self.root.geometry("1850x900")  # Tăng width lên để chứa checkbox + 9 cột
         self.root.configure(bg='#2c3e50')
         
         # Khởi tạo TinyDB
@@ -168,6 +168,26 @@ class CSVGUI:
                                        command=self.delete_row, style='Danger.TButton')
         self.delete_button.pack(side=tk.LEFT, padx=2)
         
+        # Selection card
+        selection_card = tk.Frame(control_container, bg='white', relief='solid', bd=1)
+        selection_card.pack(side=tk.LEFT, padx=(0, 10), pady=5)
+        
+        selection_label = tk.Label(selection_card, text="☑️ Selection", 
+                                font=('Arial', 10, 'bold'),
+                                bg='white', fg='#2c3e50')
+        selection_label.pack(pady=(10, 5))
+        
+        selection_button_frame = tk.Frame(selection_card, bg='white')
+        selection_button_frame.pack(padx=15, pady=(0, 15))
+        
+        self.select_all_button = ttk.Button(selection_button_frame, text="☑ Select All", 
+                                    command=self.select_all, style='Modern.TButton')
+        self.select_all_button.pack(side=tk.LEFT, padx=2)
+        
+        self.deselect_all_button = ttk.Button(selection_button_frame, text="☐ Deselect All", 
+                                     command=self.deselect_all, style='Modern.TButton')
+        self.deselect_all_button.pack(side=tk.LEFT, padx=2)
+        
         # Process control card
         process_card = tk.Frame(control_container, bg='white', relief='solid', bd=1)
         process_card.pack(side=tk.LEFT, padx=(0, 10), pady=5)
@@ -180,9 +200,13 @@ class CSVGUI:
         process_button_frame = tk.Frame(process_card, bg='white')
         process_button_frame.pack(padx=15, pady=(0, 15))
         
-        self.run_button = ttk.Button(process_button_frame, text="▶️ Run", 
+        self.run_button = ttk.Button(process_button_frame, text="▶️ Run Selected", 
                                     command=self.run_process, style='Success.TButton')
         self.run_button.pack(side=tk.LEFT, padx=2)
+        
+        self.run_all_button = ttk.Button(process_button_frame, text="▶️ Run All", 
+                                       command=self.run_all_process, style='Success.TButton')
+        self.run_all_button.pack(side=tk.LEFT, padx=2)
         
         self.stop_button = ttk.Button(process_button_frame, text="⏹️ Stop", 
                                      command=self.stop_process, style='Danger.TButton')
@@ -245,9 +269,9 @@ class CSVGUI:
         tree_frame = tk.Frame(table_container, bg='white')
         tree_frame.pack(fill=tk.BOTH, expand=True, padx=1, pady=1)
         
-        # Updated Treeview với 9 cột (thêm "Path Output")
+        # Updated Treeview với checkbox và 9 cột
         self.tree = ttk.Treeview(tree_frame, columns=(
-            "Tên thiết bị", "Tên tk", "Ảnh acc", "Ảnh id", "Ảnh sản phẩm", "Caption", 
+            "Select", "Tên thiết bị", "Tên tk", "Ảnh acc", "Ảnh id", "Ảnh sản phẩm", "Caption", 
             "Path Folder", "Path File TXT", "Path Output"
         ), show="headings", style='Modern.Treeview')
         
@@ -257,8 +281,9 @@ class CSVGUI:
         
         self.tree.configure(yscrollcommand=v_scrollbar.set, xscrollcommand=h_scrollbar.set)
         
-        # Updated headers với 9 cột bao gồm "Path Output"
+        # Updated headers với checkbox và 9 cột
         headers = {
+            "Select": "☐",
             "Tên thiết bị": "📱 Tên thiết bị",
             "Tên tk": "👤 Tên tk", 
             "Ảnh acc": "🖼️ Ảnh acc",
@@ -272,15 +297,19 @@ class CSVGUI:
         
         for col in self.tree["columns"]:
             self.tree.heading(col, text=headers[col])
-            self.tree.column(col, width=160, anchor="w")  # Giảm width xuống 160 để fit 9 cột
+            if col == "Select":
+                self.tree.column(col, width=50, anchor="center")
+            else:
+                self.tree.column(col, width=155, anchor="w")
         
         # Pack treeview and scrollbars
         self.tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         v_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         h_scrollbar.pack(side=tk.BOTTOM, fill=tk.X)
         
-        # Bind double click event
+        # Bind events
         self.tree.bind('<Double-1>', lambda e: self.edit_row())
+        self.tree.bind('<Button-1>', self.on_tree_click)
     
     def create_status_bar(self):
         """Tạo thanh trạng thái"""
@@ -306,20 +335,70 @@ class CSVGUI:
             self.row_count_label.config(text=f"Rows: {count}")
         self.root.update_idletasks()
     
+    def on_tree_click(self, event):
+        """Xử lý click vào checkbox"""
+        region = self.tree.identify_region(event.x, event.y)
+        if region == "cell":
+            column = self.tree.identify_column(event.x)
+            row_id = self.tree.identify_row(event.y)
+            
+            # Kiểm tra nếu click vào cột checkbox (cột đầu tiên #1)
+            if column == "#1" and row_id:
+                item = self.tree.item(row_id)
+                values = list(item['values'])
+                
+                # Toggle checkbox
+                if values[0] == "☐":
+                    values[0] = "☑"
+                else:
+                    values[0] = "☐"
+                
+                # Update treeview
+                self.tree.item(row_id, values=tuple(values))
+                
+                # Update data
+                index = self.tree.index(row_id)
+                if index < len(self.data):
+                    self.data[index][0] = values[0]
+                    self.auto_save_to_db()
+    
+    def select_all(self):
+        """Chọn tất cả checkbox"""
+        for i, item in enumerate(self.tree.get_children()):
+            values = list(self.tree.item(item)['values'])
+            values[0] = "☑"
+            self.tree.item(item, values=tuple(values))
+            if i < len(self.data):
+                self.data[i][0] = "☑"
+        self.auto_save_to_db()
+        self.update_status("All rows selected ✅")
+    
+    def deselect_all(self):
+        """Bỏ chọn tất cả checkbox"""
+        for i, item in enumerate(self.tree.get_children()):
+            values = list(self.tree.item(item)['values'])
+            values[0] = "☐"
+            self.tree.item(item, values=tuple(values))
+            if i < len(self.data):
+                self.data[i][0] = "☐"
+        self.auto_save_to_db()
+        self.update_status("All rows deselected ✅")
+    
     def auto_save_to_db(self):
-        """Tự động lưu vào database với 9 cột"""
+        """Tự động lưu vào database với checkbox và 9 cột"""
         try:
             self.db.truncate()
             self.db.insert_multiple([{
-                "ten_thiet_bi": row[0],
-                "ten_tk": row[1],
-                "anh_acc": row[2],
-                "anh_id": row[3],
-                "anh_san_pham": row[4],
-                "caption": row[5],
-                "path_folder": row[6],
-                "path_file_txt": row[7],
-                "path_output": row[8] if len(row) > 8 else ""
+                "selected": row[0] if row[0] in ["☐", "☑"] else "☐",
+                "ten_thiet_bi": row[1] if len(row) > 1 else "",
+                "ten_tk": row[2] if len(row) > 2 else "",
+                "anh_acc": row[3] if len(row) > 3 else "",
+                "anh_id": row[4] if len(row) > 4 else "",
+                "anh_san_pham": row[5] if len(row) > 5 else "",
+                "caption": row[6] if len(row) > 6 else "",
+                "path_folder": row[7] if len(row) > 7 else "",
+                "path_file_txt": row[8] if len(row) > 8 else "",
+                "path_output": row[9] if len(row) > 9 else ""
             } for row in self.data if any(row)])
             
             self.update_status("Auto-saved to database ✅", len(self.data))
@@ -329,11 +408,48 @@ class CSVGUI:
     
     # ================== PROCESS CONTROL ==================
     def run_process(self):
-        """Chạy upload.py"""
+        """Chạy upload.py với các dòng được chọn"""
+        selected_rows = [row for row in self.data if row[0] == "☑"]
+        
+        if not selected_rows:
+            messagebox.showwarning("⚠️ Warning", "No rows selected! Please select at least one row to run.")
+            return
+            
+        if not hasattr(self, 'process') or self.process.poll() is not None:
+            # Tạo file tạm chứa các dòng được chọn
+            import tempfile
+            import json
+            
+            temp_db = TinyDB(tempfile.NamedTemporaryFile(delete=False, suffix='.json').name)
+            temp_db.insert_multiple([{
+                "selected": row[0],
+                "ten_thiet_bi": row[1],
+                "ten_tk": row[2],
+                "anh_acc": row[3],
+                "anh_id": row[4],
+                "anh_san_pham": row[5],
+                "caption": row[6],
+                "path_folder": row[7],
+                "path_file_txt": row[8],
+                "path_output": row[9]
+            } for row in selected_rows])
+            
+            self.process = subprocess.Popen(["python", "upload.py", temp_db._storage.path])
+            self.update_status(f"Upload started for {len(selected_rows)} selected devices! ▶️")
+            messagebox.showinfo("✅ Success", f"Upload process started for {len(selected_rows)} selected devices!")
+        else:
+            messagebox.showwarning("⚠️ Warning", "Upload process is already running!")
+
+    def run_all_process(self):
+        """Chạy upload.py với tất cả các dòng"""
+        if not self.data:
+            messagebox.showwarning("⚠️ Warning", "No data available!")
+            return
+            
         if not hasattr(self, 'process') or self.process.poll() is not None:
             self.process = subprocess.Popen(["python", "upload.py"])
-            self.update_status("Upload started! ▶️")
-            messagebox.showinfo("✅ Success", "Upload process started successfully!")
+            self.update_status(f"Upload started for all {len(self.data)} devices! ▶️")
+            messagebox.showinfo("✅ Success", f"Upload process started for all {len(self.data)} devices!")
         else:
             messagebox.showwarning("⚠️ Warning", "Upload process is already running!")
 
@@ -348,10 +464,7 @@ class CSVGUI:
 
     def toggle_upload(self):
         """Khi tick/untick checkbox Upload"""
-        # if self.upload_var.get():
-        #     self.run_process()
-        # else:
-        #     self.stop_process()
+        pass
 
     # ================== CSV & DB ==================
     def import_csv(self):
@@ -386,11 +499,14 @@ class CSVGUI:
                         row[0] = prev_device
                     else:
                         if prev_device and prev_device != device:
-                            self.tree.insert("", "end", values=("", "", "", "", "", "", "", "", ""))
-                            self.data.append(["", "", "", "", "", "", "", "", ""])
+                            self.tree.insert("", "end", values=("☐", "", "", "", "", "", "", "", "", ""))
+                            self.data.append(["☐", "", "", "", "", "", "", "", "", ""])
                         prev_device = device
-                    self.data.append(row[:9])  # Chỉ lấy 9 cột đầu tiên
-                    self.tree.insert("", "end", values=tuple(row[:9]))
+                    
+                    # Thêm checkbox vào đầu row
+                    row_with_checkbox = ["☐"] + row[:9]
+                    self.data.append(row_with_checkbox)
+                    self.tree.insert("", "end", values=tuple(row_with_checkbox))
                     row_count += 1
             
             self.update_status("CSV imported successfully! ✅", row_count)
@@ -410,7 +526,8 @@ class CSVGUI:
             return
         item = self.tree.item(selected[0])
         values = item['values']
-        self.edit_window(values, is_add=False, selected=selected[0])
+        # Bỏ checkbox khi edit (bỏ cột đầu tiên)
+        self.edit_window(values[1:] if len(values) > 1 else values, is_add=False, selected=selected[0])
     
     def delete_row(self):
         selected = self.tree.selection()
@@ -429,7 +546,7 @@ class CSVGUI:
     def edit_window(self, values, is_add=False, selected=None):
         edit_win = tk.Toplevel(self.root)
         edit_win.title("✏️ Edit Row" if not is_add else "➕ Add New Row")
-        edit_win.geometry("800x950")  # Tăng height lên 950px để chứa field mới
+        edit_win.geometry("800x950")
         edit_win.configure(bg='#ecf0f1')
         edit_win.resizable(False, False)
         
@@ -452,7 +569,7 @@ class CSVGUI:
         form_frame = tk.Frame(edit_win, bg='white')
         form_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
         
-        # Updated labels với 9 trường bao gồm Path Output
+        # Updated labels với 9 trường (không bao gồm checkbox)
         labels = ["📱 Tên thiết bị", "👤 Tên tk", "🖼️ Ảnh acc", "🆔 Ảnh id", 
                  "📸 Ảnh sản phẩm", "📝 Caption", "📁 Path Folder", "📄 Path File TXT", "🚀 Path Output"]
         entries = []
@@ -501,18 +618,25 @@ class CSVGUI:
                 new_values.append("")
             
             if is_add:
-                if self.data and self.data[-1][0] != new_values[0]:
-                    self.tree.insert("", "end", values=("", "", "", "", "", "", "", "", ""))
-                    self.data.append(["", "", "", "", "", "", "", "", ""])
-                self.tree.insert("", "end", values=tuple(new_values))
-                self.data.append(new_values)
+                # Thêm checkbox vào đầu
+                new_values_with_checkbox = ["☐"] + new_values
+                
+                if self.data and len(self.data[-1]) > 1 and self.data[-1][1] != new_values[0]:
+                    self.tree.insert("", "end", values=("☐", "", "", "", "", "", "", "", "", ""))
+                    self.data.append(["☐", "", "", "", "", "", "", "", "", ""])
+                self.tree.insert("", "end", values=tuple(new_values_with_checkbox))
+                self.data.append(new_values_with_checkbox)
                 self.update_status("Row added ✅", len(self.data))
                 self.auto_save_to_db()  # Tự động lưu sau khi thêm
                 messagebox.showinfo("✅ Success", "Row added and auto-saved successfully!")
             else:
+                # Giữ nguyên trạng thái checkbox cũ
                 index = self.tree.index(selected)
-                self.data[index] = new_values
-                self.tree.item(selected, values=tuple(new_values))
+                old_checkbox = self.data[index][0] if len(self.data[index]) > 0 else "☐"
+                new_values_with_checkbox = [old_checkbox] + new_values
+                
+                self.data[index] = new_values_with_checkbox
+                self.tree.item(selected, values=tuple(new_values_with_checkbox))
                 self.update_status("Row updated ✅", len(self.data))
                 self.auto_save_to_db()  # Tự động lưu sau khi chỉnh sửa
                 messagebox.showinfo("✅ Success", "Row updated and auto-saved successfully!")
@@ -545,8 +669,9 @@ class CSVGUI:
             
             records = self.db.all()
             for row in records:
-                # Updated để xử lý schema mới với 9 cột
+                # Updated để xử lý schema mới với checkbox và 9 cột
                 values = (
+                    row.get("selected", "☐"),
                     row.get("ten_thiet_bi", ""),
                     row.get("ten_tk", ""),
                     row.get("anh_acc", ""),

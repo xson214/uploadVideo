@@ -10,6 +10,7 @@ from PIL import Image
 import io
 import concurrent.futures
 import random
+import sys
 
 X_ratio=0.8
 Y_ratio=0.8
@@ -19,8 +20,27 @@ ICON_DIR = "image/"  # thư mục chứa icon mẫu
 ID_DIR = "img_id/"  # thư mục chứa id  mẫu
 ACC_DIR = "img_acc/"  # thư mục chứa acc  mẫu
 
-db= TinyDB('accounts.json')
-rows = db.all()
+# Kiểm tra xem có truyền đường dẫn database tạm không
+if len(sys.argv) > 1:
+    db_path = sys.argv[1]  # Đường dẫn database tạm từ GUI
+else:
+    db_path = 'accounts.json'  # Database mặc định
+
+db = TinyDB(db_path)
+all_rows = db.all()
+
+# Lọc các dòng được chọn (có checkbox là "☑")
+selected_rows = [row for row in all_rows if row.get('selected') == '☑']
+
+# Nếu có dòng được chọn, dùng selected_rows, ngược lại dùng tất cả
+rows = selected_rows if selected_rows else all_rows
+
+print(f"📊 Số lượng thiết bị sẽ xử lý: {len(rows)}")
+if selected_rows:
+    print("✅ Chỉ xử lý các thiết bị được chọn")
+else:
+    print("✅ Xử lý tất cả thiết bị")
+
 adb_path = "adb"  # nếu adb đã có trong PATH thì để nguyên
 
 def adb_screencap(device_id):
@@ -240,16 +260,7 @@ def change_account(devices_id, IMG_ACC, IMG_ID):
         tap_in(devices_id, x_ratio=0.95, y_ratio=0.95)
         return True
     return False
-    # if find_and_tap(devices_id,os.path.join(ICON_DIR, "profile.png"), long_press=False):
-    #     adb_screencap(device_id=devices_id)
-    #     profile_id =os.path.splitext(os.path.basename(IMG_ID))[0]  # lấy tên file không có đuôi
-    
-    # if acc_id != profile_id:
-    #     print(f"⚠️ Tài khoản hiện tại ({profile_id}) khác với tài khoản đăng nhập ({acc_id}). Vui lòng kiểm tra lại.")
-    #     return False
-    # else:
-    #     print(f"✅ Tài khoản hiện tại ({profile_id}) khớp với tài khoản đăng nhập ({acc_id}).")
-    #     return True
+
 def tap_in(devices_id, x=None, y=None, x_ratio=None, y_ratio=None):
     try:
         screen_image = adb_screencap(devices_id)
@@ -280,15 +291,8 @@ def tap_in(devices_id, x=None, y=None, x_ratio=None, y_ratio=None):
     print(f"👉 Tap tại ({x},{y})")
 
     time.sleep(5)
-    # screenshot = "screen.jpg"
-    # img = cv2.imread(screenshot)
-    # if img is not None:
-    #     cv2.circle(img, (x, y), 10, (0, 255, 0), -1)
-    #     cv2.imwrite("debug_match.png", img)
-    # else:
-    #     print("❌ Không load được screen.jpg để vẽ chấm xanh.")
-
     return True
+
 def adb_clear_downloads(device_id):
     """
     Xóa toàn bộ file trong thư mục /sdcard/Download.
@@ -512,6 +516,7 @@ def process_rows(i,row):
 
         except Exception as e:
             print(f"❌ Lỗi khi xử lý dòng {i}: {e}")
+
 if __name__ == "__main__":
     if not rows:
         print("❌ Không có dòng nào trong database -> thoát")
@@ -524,4 +529,4 @@ if __name__ == "__main__":
             try:
                 future.result()
             except Exception as e:
-                print(f"❌ Lỗi khi xử lý dòng {i}: {e}")    
+                print(f"❌ Lỗi khi xử lý dòng {i}: {e}")

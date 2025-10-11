@@ -348,10 +348,10 @@ class CSVGUI:
 
     def toggle_upload(self):
         """Khi tick/untick checkbox Upload"""
-        if self.upload_var.get():
-            self.run_process()
-        else:
-            self.stop_process()
+        # if self.upload_var.get():
+        #     self.run_process()
+        # else:
+        #     self.stop_process()
 
     # ================== CSV & DB ==================
     def import_csv(self):
